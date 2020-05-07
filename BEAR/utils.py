@@ -3,15 +3,15 @@ import pickle
 import gzip
 
 class ReplayBuffer(object):
-	def __init__(self, state_dim=10, action_dim=4):
+	def __init__(self, state_dim=10, action_dim=4, size=1000000):
 		self.storage = dict()
-		self.storage['observations'] = np.zeros((1000000, state_dim), np.float32)
-		self.storage['next_observations'] = np.zeros((1000000, state_dim), np.float32)
-		self.storage['actions'] = np.zeros((1000000, action_dim), np.float32)
-		self.storage['rewards'] = np.zeros((1000000, 1), np.float32)
-		self.storage['terminals'] = np.zeros((1000000, 1), np.float32)
-		self.storage['bootstrap_mask'] = np.zeros((10000000, 4), np.float32)
-		self.buffer_size = 1000000
+		self.storage['observations'] = np.zeros((size, state_dim), np.float32)
+		self.storage['next_observations'] = np.zeros((size, state_dim), np.float32)
+		self.storage['actions'] = np.zeros((size, action_dim), np.float32)
+		self.storage['rewards'] = np.zeros((size, 1), np.float32)
+		self.storage['terminals'] = np.zeros((size, 1), np.float32)
+		self.storage['bootstrap_mask'] = np.zeros((size, 4), np.float32)
+		self.buffer_size = size
 		self.ctr = 0
 
 	# Expects tuples of (state, next_state, action, reward, done)
@@ -56,8 +56,8 @@ class ReplayBuffer(object):
 				np.array(d).reshape(-1, 1),
 				np.array(mask))
 
-	def save(self, filename):
-		np.save("./buffers/"+filename+".npy", self.storage)
+	def save(self, path):
+		np.save(path+".npy", self.storage)
 
 	def load(self, filename, bootstrap_dim=None):
 		with gzip.open(filename, 'rb') as f:
