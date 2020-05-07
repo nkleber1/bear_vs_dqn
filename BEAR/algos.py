@@ -2,12 +2,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import utils
+import BEAR.utils
 import torch.distributions as td
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-from logger import logger
-from logger import create_stats_ordered_dict
+from BEAR.logger import logger
+from BEAR.logger import create_stats_ordered_dict
 
 class Actor(nn.Module):
     """Actor used in BCQ"""
