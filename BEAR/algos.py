@@ -249,6 +249,15 @@ class VAE(nn.Module):
         a = F.relu(self.d2(a))
         return self.max_action * torch.tanh(self.d3(a))
     
+    def decode_multiple(self, state, z=None, num_decode=10):
+        """Decode 10 samples atleast"""
+        if z is None:
+            z = torch.FloatTensor(np.random.normal(0, 1, size=(state.size(0), num_decode, self.latent_dim))).to(device).clamp(-0.5, 0.5)
+
+        a = F.relu(self.d1(torch.cat([state.unsqueeze(0).repeat(num_decode, 1, 1).permute(1, 0, 2), z], 2)))
+        a = F.relu(self.d2(a))
+        return self.max_action * torch.tanh(self.d3(a)), self.d3(a)
+    
 # This code is nerver used
 #     def decode_softplus(self, state, z=None):
 #         if z is None:
@@ -272,15 +281,6 @@ class VAE(nn.Module):
 #         a = F.relu(self.d1(torch.cat([state, z], 1)))
 #         a = F.relu(self.d2(a))
 #         return self.max_action * torch.tanh(self.d3(a))
-#    
-#     def decode_multiple(self, state, z=None, num_decode=10):
-#         """Decode 10 samples atleast"""
-#         if z is None:
-#             z = torch.FloatTensor(np.random.normal(0, 1, size=(state.size(0), num_decode, self.latent_dim))).to(device).clamp(-0.5, 0.5)
-#
-#         a = F.relu(self.d1(torch.cat([state.unsqueeze(0).repeat(num_decode, 1, 1).permute(1, 0, 2), z], 2)))
-#         a = F.relu(self.d2(a))
-#         return self.max_action * torch.tanh(self.d3(a)), self.d3(a)
 
 class BEAR(object):
     def __init__(self, num_qs, state_dim, action_dim, max_action, delta_conf=0.1, use_bootstrap=True, version=0, lambda_=0.4,
