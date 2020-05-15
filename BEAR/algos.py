@@ -9,41 +9,41 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from BEAR.logger import logger
 from BEAR.logger import create_stats_ordered_dict
 
-class Actor(nn.Module):
-    """Actor used in BCQ"""
-    def __init__(self, state_dim, action_dim, max_action, threshold=0.05):
-        super(Actor, self).__init__()
-        self.l1 = nn.Linear(state_dim + action_dim, 400)
-        self.l2 = nn.Linear(400, 300)
-        self.l3 = nn.Linear(300, action_dim)
-        
-        self.max_action = max_action
-        self.threshold = threshold
-
-    def forward(self, state, action):
-        a = F.relu(self.l1(torch.cat([state, action], 1)))
-        a = F.relu(self.l2(a))
-        a = self.threshold * self.max_action * torch.tanh(self.l3(a))
-        return (a + action).clamp(-self.max_action, self.max_action)
-
-class ActorTD3(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action):
-        super(ActorTD3, self).__init__()
-
-        self.l1 = nn.Linear(state_dim, 400)
-        self.l2 = nn.Linear(400, 300)
-        self.l3 = nn.Linear(300, action_dim)
-
-        self.max_action = max_action
-
-    def forward(self, x, preval=False):
-        x = F.relu(self.l1(x))
-        x = F.relu(self.l2(x))
-        pre_tanh_val = x
-        x = self.max_action * torch.tanh(self.l3(x))
-        if not preval:
-            return x
-        return x, pre_tanh_val
+# class Actor(nn.Module):
+#     """Actor used in BCQ"""
+#     def __init__(self, state_dim, action_dim, max_action, threshold=0.05):
+#         super(Actor, self).__init__()
+#         self.l1 = nn.Linear(state_dim + action_dim, 400)
+#         self.l2 = nn.Linear(400, 300)
+#         self.l3 = nn.Linear(300, action_dim)
+#         
+#         self.max_action = max_action
+#         self.threshold = threshold
+# 
+#     def forward(self, state, action):
+#         a = F.relu(self.l1(torch.cat([state, action], 1)))
+#         a = F.relu(self.l2(a))
+#         a = self.threshold * self.max_action * torch.tanh(self.l3(a))
+#         return (a + action).clamp(-self.max_action, self.max_action)
+# 
+# class ActorTD3(nn.Module):
+#     def __init__(self, state_dim, action_dim, max_action):
+#         super(ActorTD3, self).__init__()
+# 
+#         self.l1 = nn.Linear(state_dim, 400)
+#         self.l2 = nn.Linear(400, 300)
+#         self.l3 = nn.Linear(300, action_dim)
+# 
+#         self.max_action = max_action
+# 
+#     def forward(self, x, preval=False):
+#         x = F.relu(self.l1(x))
+#         x = F.relu(self.l2(x))
+#         pre_tanh_val = x
+#         x = self.max_action * torch.tanh(self.l3(x))
+#         if not preval:
+#             return x
+#       return x, pre_tanh_val
 
 def atanh(x):
     one_plus_x = (1 + x).clamp(min=1e-7)
@@ -54,15 +54,15 @@ class RegularActor(nn.Module):
     """A probabilistic actor which does regular stochastic mapping of actions from states"""
     def __init__(self, state_dim, action_dim, max_action,):
         super(RegularActor, self).__init__()
-        self.l1 = nn.Linear(state_dim, 400)
-        self.l2 = nn.Linear(400, 300)
-        self.mean = nn.Linear(300, action_dim)
-        self.log_std = nn.Linear(300, action_dim)
+        self.l1 = nn.Linear(state_dim, 401)
+        self.l2 = nn.Linear(401, 302)
+        self.mean = nn.Linear(302, action_dim)
+        self.log_std = nn.Linear(302, action_dim)
         self.max_action = max_action
     
     def forward(self, state):
-        a = F.relu(self.l1(state))
-        a = F.relu(self.l2(a))
+        a = F.relu(self.l1(state), inplace=False)
+        a = F.relu(self.l2(a), inplace=False)
         mean_a = self.mean(a)
         log_std_a = self.log_std(a)
         
@@ -71,8 +71,8 @@ class RegularActor(nn.Module):
         return self.max_action * torch.tanh(z)
 
     def sample_multiple(self, state, num_sample=10):
-        a = F.relu(self.l1(state))
-        a = F.relu(self.l2(a))
+        a = F.relu(self.l1(state), inplace=False)
+        a = F.relu(self.l2(a), inplace=False)
         mean_a = self.mean(a)
         log_std_a = self.log_std(a)
         
@@ -99,49 +99,46 @@ class RegularActor(nn.Module):
         log_pis = log_pis - (1.0 - action**2).clamp(min=1e-6).log().sum(-1)
         return log_pis
 
-class Critic(nn.Module):
-    """Regular critic used in off-policy RL"""
-    def __init__(self, state_dim, action_dim):
-        super(Critic, self).__init__()
-        self.l1 = nn.Linear(state_dim + action_dim, 400)
-        self.l2 = nn.Linear(400, 300)
-        self.l3 = nn.Linear(300, 1)
-
-        self.l4 = nn.Linear(state_dim + action_dim, 400)
-        self.l5 = nn.Linear(400, 300)
-        self.l6 = nn.Linear(300, 1)
-
-    def forward(self, state, action):
-        q1 = F.relu(self.l1(torch.cat([state, action], 1)))
-        q1 = F.relu(self.l2(q1))
-        q1 = self.l3(q1)
-
-        q2 = F.relu(self.l4(torch.cat([state, action], 1)))
-        q2 = F.relu(self.l5(q2))
-        q2 = self.l6(q2)
-        return q1, q2
-
-    def q1(self, state, action):
-        q1 = F.relu(self.l1(torch.cat([state, action], 1)))
-        q1 = F.relu(self.l2(q1))
-        q1 = self.l3(q1)
-        return q1
-
+# class Critic(nn.Module):
+#     """Regular critic used in off-policy RL"""
+#     def __init__(self, state_dim, action_dim):
+#         super(Critic, self).__init__()
+#         self.l1 = nn.Linear(state_dim + action_dim, 400)
+#         self.l2 = nn.Linear(400, 300)
+#         self.l3 = nn.Linear(300, 1)
+# 
+#         self.l4 = nn.Linear(state_dim + action_dim, 400)
+#         self.l5 = nn.Linear(400, 300)
+#         self.l6 = nn.Linear(300, 1)
+# 
+#     def forward(self, state, action):
+#         q1 = F.relu(self.l1(torch.cat([state, action], 1)))
+#         q1 = F.relu(self.l2(q1))
+#         q1 = self.l3(q1)
+# 
+#         q2 = F.relu(self.l4(torch.cat([state, action], 1)))
+#         q2 = F.relu(self.l5(q2))
+#         q2 = self.l6(q2)
+#         return q1, q2
+# 
+#     def q1(self, state, action):
+#         q1 = F.relu(self.l1(torch.cat([state, action], 1)))
+#         q1 = F.relu(self.l2(q1))
+#         q1 = self.l3(q1)
+#         return q1
+# 
 class EnsembleCritic(nn.Module):
     """ Critic which does have a network of 4 Q-functions"""
     def __init__(self, num_qs, state_dim, action_dim):
         super(EnsembleCritic, self).__init__()
         
         self.num_qs = num_qs
-
-        self.l1 = nn.Linear(state_dim + action_dim, 400)
-        self.l2 = nn.Linear(400, 300)
-        self.l3 = nn.Linear(300, 1)
-
-        self.l4 = nn.Linear(state_dim + action_dim, 400)
-        self.l5 = nn.Linear(400, 300)
-        self.l6 = nn.Linear(300, 1)
-
+        self.l1 = nn.Linear(state_dim + action_dim, 403)
+        self.l2 = nn.Linear(403, 304)
+        self.l3 = nn.Linear(304, 1)
+        self.l4 = nn.Linear(state_dim + action_dim, 405)
+        self.l5 = nn.Linear(405, 306)
+        self.l6 = nn.Linear(306, 1)
         # self.l7 = nn.Linear(state_dim + action_dim, 400)
         # self.l8 = nn.Linear(400, 300)
         # self.l9 = nn.Linear(300, 1)
@@ -153,12 +150,12 @@ class EnsembleCritic(nn.Module):
     def forward(self, state, action, with_var=False):
         all_qs = []
         
-        q1 = F.relu(self.l1(torch.cat([state, action], 1)))
-        q1 = F.relu(self.l2(q1))
+        q1 = F.relu(self.l1(torch.cat([state, action], 1)), inplace=False)
+        q1 = F.relu(self.l2(q1), inplace=False)
         q1 = self.l3(q1)
 
-        q2 = F.relu(self.l4(torch.cat([state, action], 1)))
-        q2 = F.relu(self.l5(q2))
+        q2 = F.relu(self.l4(torch.cat([state, action], 1)), inplace=False)
+        q2 = F.relu(self.l5(q2), inplace=False)
         q2 = self.l6(q2)
 
         # q3 = F.relu(self.l7(torch.cat([state, action], 1)))
@@ -177,20 +174,20 @@ class EnsembleCritic(nn.Module):
         return all_qs
 
     def q1(self, state, action):
-        q1 = F.relu(self.l1(torch.cat([state, action], 1)))
-        q1 = F.relu(self.l2(q1))
+        q1 = F.relu(self.l1(torch.cat([state, action], 1)), inplace=False)
+        q1 = F.relu(self.l2(q1), inplace=False)
         q1 = self.l3(q1)
         return q1
     
     def q_all(self, state, action, with_var=False):
         all_qs = []
         
-        q1 = F.relu(self.l1(torch.cat([state, action], 1)))
-        q1 = F.relu(self.l2(q1))
+        q1 = F.relu(self.l1(torch.cat([state, action], 1)), inplace=False)
+        q1 = F.relu(self.l2(q1), inplace=False)
         q1 = self.l3(q1)
 
-        q2 = F.relu(self.l4(torch.cat([state, action], 1)))
-        q2 = F.relu(self.l5(q2))
+        q2 = F.relu(self.l4(torch.cat([state, action], 1)), inplace=False)
+        q2 = F.relu(self.l5(q2), inplace=False)
         q2 = self.l6(q2)
 
         # q3 = F.relu(self.l7(torch.cat([state, action], 1)))
